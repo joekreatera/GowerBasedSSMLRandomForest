@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from  ksm.SSMLKVForestPredictorMPSC import SSMLKVForestPredictor
-from sklearn.model_selection import KFold
+# from sklearn.model_selection import KFold
 
 from ksm.DownloadHelper import *
 from sklearn.model_selection import train_test_split
@@ -12,14 +12,14 @@ from sklearn.metrics import label_ranking_average_precision_score
 from random import random
 from random import randint
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import GridSearchCV
+# from sklearn.model_selection import GridSearchCV
 from ksm.roc_auc_reimplementation import roc_auc as roc_auc_score
 from sklearn.metrics import make_scorer
-from sklearn.model_selection import ParameterGrid
+# from sklearn.model_selection import ParameterGrid
 from ksm.utils import get_metrics,multilabel_train_test_split, get_features, save_report, multilabel_kfold_split
 import sys
-from sklearn.preprocessing import StandardScaler, QuantileTransformer, Normalizer
-from ksm.UD3_5Clustering import UD3_5Clustering
+# from sklearn.preprocessing import StandardScaler, QuantileTransformer, Normalizer
+# from ksm.UD3_5Clustering import UD3_5Clustering
 import platform
 import warnings
 import multiprocessing as mp
