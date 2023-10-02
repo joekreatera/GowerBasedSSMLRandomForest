@@ -20,10 +20,20 @@ from ksm.utils import get_metrics,multilabel_train_test_split, get_features, sav
 import sys
 # from sklearn.preprocessing import StandardScaler, QuantileTransformer, Normalizer
 # from ksm.UD3_5Clustering import UD3_5Clustering
+import os
 import platform
 import warnings
 import multiprocessing as mp
 warnings.filterwarnings("ignore")
+
+
+prefix = './'
+
+input_path = prefix + 'datasets'
+output_path = os.path.join(prefix, 'results')
+model_path = os.path.join(prefix, 'results')
+training_path = input_path
+
 
 
 
@@ -100,7 +110,9 @@ def train():
     'scene':6
     }
     # getFromOpenML will convert automatically the classes found to a mutually exclusive multilabel
-    dataset = getFromOpenML(ds_name,version="active",ospath='datasets/', download=False, save=False)
+    print(training_path)
+    dataset = getFromOpenML(ds_name,version="active",ospath=training_path+'/', download=False, save=False)
+
     #dataset = getFromOpenML(ds_name+'-train',version="active",ospath='datasets/', download=False, save=False)
     # test_dataset = getFromOpenML(ds_name+'-test',version="active",ospath='datasets/', download=False, save=False)
     print("Dataset memory usage BEFORE conversion" , dataset.memory_usage(index=True).sum() )
@@ -118,7 +130,7 @@ def train():
     for label in label_columns:
         dataset[label] = pd.to_numeric( dataset[label] , downcast="unsigned" )
 
-    a = 1
+    a = 10
     for col in get_features(dataset, label_columns):
         if(dataset[col].dtype == 'float64'):
             dataset[col] = pd.to_numeric( dataset[col] , downcast="float" )
@@ -190,7 +202,7 @@ def train():
     parameters = {
     'a_r':a,    
     'trees_quantity':(int, 20,130), # 20- 130
-    "M_groups":(int,4,4), # 35 - 120 
+    "M_groups":(int,35,120), # 35 - 120 
     "N_attr":(int, 2**5-1 , 2**16+1 ),
     'leaf_relative_instance_quantity':(float,0.05,0.17), 
     'scaler': None,
@@ -320,13 +332,14 @@ def train():
         parameters["accuracy_average_k_fold"] = accuracy/k_fold
 
         # as only the last model is kept, we are trusting that the performance is pretty close to the average
-        o = save_report('./datasets', ds_name+f"kfold_", y_true, predictions, probabilities, do_output=True, parameters=params)
+        o = save_report( model_path + '/', ds_name+f"kfold_", y_true, predictions, probabilities, do_output=True, parameters=params)
         #print(o)
         final_list.append(o)
 
 
     df = pd.DataFrame(data=final_list)
     df.to_csv('all_params_kfold.csv')
+    
 
 
 if __name__ == '__main__':
