@@ -67,8 +67,10 @@ def calculate_parameters(params_dict):
             params[p] = item # fixed to a value
     return params
 
-if __name__ == '__main__':
-    ds_name = "eukaryote"
+def train():
+    # for linux platforms, could be forkserver, fork, spawn.... forkserver works in mac
+    mp.set_start_method('forkserver')
+    ds_name = "flags"
 
     print("Cpus " , mp.cpu_count() )
     print("Info " , platform.processor() )
@@ -250,23 +252,13 @@ if __name__ == '__main__':
         folds = multilabel_kfold_split(n_splits=k_fold, shuffle=True, random_state= 180)
         fold = -1
         for train_index, test_index in folds.split(train_set[instance_columns], train_set[label_columns] ):
-            break
-
             fold += 1
             print("On fold " , fold , "------>",len(train_index), "    " , len(train_set.index))
-            
-            
-            
-            # still have the question of > do folds need to be mutually exclusive regarding the test set?
-            
             k_train_set = train_set.loc[train_index]
             k_test_set = train_set.loc[test_index] 
             # multilabel_train_test_split(train_set, test_size=1/k_fold, random_state=180+fold, stratify=train_set[label_columns]) # .05 for the CLUS test as it was with train and test datasets
             labeled_instances, unlabeled_instances =  multilabel_train_test_split(k_train_set, test_size=unlabeled_ratio, random_state=141, stratify=k_train_set[label_columns]) # simulate unlabeled instances
-            
-
-            X = k_train_set[instance_columns]
-            
+            X = k_train_set[instance_columns]        
             y = k_train_set[label_columns]
             predictor = SSMLKVForestPredictor(
                                         unlabeledIndex=unlabeled_instances.index,
@@ -274,17 +266,9 @@ if __name__ == '__main__':
                                         hyper_params_dict = params,
                                         is_multiclass = False,
                                         do_random_attribute_selection = True, # wont be needed for this one
-                                        njobs=2
-                                        )
-                                                                    
+                                        njobs=total_jobs
+                                        )                 
             predictor.fit(X,y)
-
-            # structure = predictor.get_tree_structure(y)
-
-            #for st in structure:
-            #    print_structure(st)
-
-
             y_true = k_test_set[label_columns].to_numpy()
             x_test = k_test_set[instance_columns]
     
@@ -343,3 +327,9 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(data=final_list)
     df.to_csv('all_params_kfold.csv')
+
+
+if __name__ == '__main__':
+    train()
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)
