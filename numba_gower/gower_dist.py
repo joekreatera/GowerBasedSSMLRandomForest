@@ -125,6 +125,7 @@ def gower_distance_vector_to_matrix(x , X,cat_cols , mn=None, mx = None):
         if( cat_cols[0] > -1 and col  in cat_cols ): # we should convert the different columns to int values.
             # the problem is that x[col] 
             a1 = M[:,col].astype(numpy.int8)
+            print(x , " -> " ,  x.shape)
             a2 = x[0,col].astype(numpy.int8)
             a3 = ( a1  == a2  ).astype(numpy.int8)
             res -=   ( a3 )/n
