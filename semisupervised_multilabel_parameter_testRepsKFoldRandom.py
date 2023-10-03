@@ -332,7 +332,7 @@ def train():
         parameters["accuracy_average_k_fold"] = accuracy/k_fold
 
         # as only the last model is kept, we are trusting that the performance is pretty close to the average
-        o = save_report( model_path, ds_name+f"kfold_", y_true, predictions, probabilities, do_output=True, parameters=params)
+        o = save_report( model_path + '/', ds_name+f"kfold_", y_true, predictions, probabilities, do_output=True, parameters=params)
         #print(o)
         final_list.append(o)
 
