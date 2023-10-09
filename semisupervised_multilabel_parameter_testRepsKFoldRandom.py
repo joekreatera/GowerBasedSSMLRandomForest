@@ -81,7 +81,7 @@ def train():
     # for linux platforms, could be forkserver, fork, spawn.... forkserver works in mac
     if( sys.platform.find('linux') > -1 ):
         mp.set_start_method('forkserver')
-    ds_name = "water"
+    ds_name = "emotions"
 
     print("Cpus " , mp.cpu_count() )
     print("Info " , platform.processor() )
@@ -137,7 +137,7 @@ def train():
             dataset[col] = pd.to_numeric( dataset[col] , downcast="float" )
 
         if(dataset[col].dtype == 'int64'):
-            dataset[col] = pd.to_numeric( dataset[col] , downcast="integer" )
+            dataset[col] = pd.to_numeric( dataset[col] , downcast="float" )
 
 
         
@@ -202,7 +202,7 @@ def train():
 
     parameters = {
     'a_r':a,    
-    'trees_quantity':(int, 4,4), # 20- 130
+    'trees_quantity':(int, 20,130), # 20- 130
     "M_groups":(int,35,120), # 35 - 120 
     "N_attr":(int, 2**5-1 , 2**16+1 ),
     'leaf_relative_instance_quantity':(float,0.05,0.17), 
@@ -287,6 +287,7 @@ def train():
     
             predictions, probabilities = predictor.predict_with_proba(x_test) #y_true = y_true
 
+            # print( predictor.get_tree_structure(y_true) )
             results_pred = pd.DataFrame(predictions)
             results_prob = pd.DataFrame(probabilities)
             results_true = pd.DataFrame(y_true)

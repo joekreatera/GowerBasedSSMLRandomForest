@@ -18,7 +18,7 @@ import math
 import threading
 from multiprocessing import Process
 import random
-from .utils import pairwise_distances, silhouette_score
+from .utils import pairwise_distances, silhouette_score, print_numba_signatures
 from .SSClustering import SSClustering
 
 from sklearn.metrics import silhouette_score as sk_silhouette_score
@@ -71,6 +71,7 @@ class CategoricalDictionary():
                 mappings[col][ df[col].cat.categories[c] ] = c
 
             df[col] = df[col].cat.codes 
+            df[col] = pd.to_numeric( df[col] , downcast="float" ) #the idea is to get a final float32 array
         return mappings
 
     def __init__(self, pandas_columns, pandas_dtypes) -> None:
@@ -433,7 +434,8 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         attr_cluster_distance =(attr_cluster_distance_A + attr_cluster_distance_B)*0.5 # lets try to find the clusters with the most space between them.
         
         #print("Feature Distance Score Time: " , (time() - feature_distance_time)  )
-
+        #iq =  "   ---     ".join([ str(x) for x in  [len(left_labels_index), len(right_labels_index), len(left_cluster), len(right_cluster), min_supervised_per_leaf, self.get_leaf_instance_quantity() ] ])
+        #print("instance quantities!!! " , iq  )
         if( len(left_labels_index)  <= min_supervised_per_leaf or 
             len(right_labels_index) <= min_supervised_per_leaf 
             or len(left_cluster) < self.get_leaf_instance_quantity()
@@ -450,8 +452,11 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         sup_unsup_ratio_balance = min( left_sup_unsup_ratio , right_sup_unsup_ratio) / max( left_sup_unsup_ratio , right_sup_unsup_ratio)
         best_purity = 0
         
+        
         # actual_coeff = (1-attr_cluster_distance)*self.node_hyper_params["pD"] +  (1-distance_avg)*self.node_hyper_params["pA"] + (1-s_score)*self.node_hyper_params["pB"] +  (c_score)*self.node_hyper_params["pC"] # c_score is already 
         actual_coeff = (1-distance_avg)*self.node_hyper_params["pA"] + supervised_imbalance*self.node_hyper_params["pB"] +  (sup_unsup_ratio_balance)*self.node_hyper_params["pC"] + (c_score)*self.node_hyper_params["pD"] +(s_score)*self.node_hyper_params["pE"]  + correlation_data*self.node_hyper_params["pF"] + (1-attr_cluster_distance)*self.node_hyper_params["pG"]
+        
+        #print(" checking values " , supervised_imbalance," ",left_sup_unsup_ratio," ",right_sup_unsup_ratio," ",sup_unsup_ratio_balance, " > ", actual_coeff )
         
         return left_labels_index,right_labels_index,actual_coeff,left_cluster,right_cluster,sscluster,actual_coeff,correlation_data
 
@@ -489,6 +494,7 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         shared_mem.buf[tid:tid+1] = bytearray([2])
         shared_mem.close()
         # tq_bar.update(1)
+        print_numba_signatures()
         return tree #f"hello {i}"
     
     def generate_children(self, node,recursion, tree_id = 0 ,full_instances=None, full_labels=None ):
@@ -552,7 +558,7 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         columns_selected_history = None
 
         while m < m_groups and iteration < max_iterations:
-            #optimization_task_time = time()
+            optimization_task_time = time()
             m+=1
             iteration += 1
             #random_cols_time = time()
@@ -565,7 +571,7 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             selected_cols = [instances.columns[i] for i in ls]
             
             res = self.get_option(instances, selected_cols, labels, label_index, df_labels_distances, min_supervised_per_leaf)
-            #print(f"Optimization task time ({tree_id} - {node.id}): " , (time() - optimization_task_time) )
+            #print(f"Optimization task time ({tree_id} - {node.id}): " , (time() - optimization_task_time) , " // "  , res )
                 
             if( res is None):
                 m -= 1
@@ -582,8 +588,10 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             correlation_data =res[7]
 
             new_best = False
+            # print(f"---------------------- +++++++++++++ {tree_id} {actual_coeff}     {best_partition_coeff}" , flush=True)
+                    
             if( actual_coeff > best_partition_coeff):
-                    # print(f"{tree_id} {actual_coeff}     {best_partition_coeff}      {supervised_imbalance}_ {sup_unsup_ratio_balance}       {attr_cluster_distance} {distance_avg} {1-s_score} {c_score} ")
+                    #print(f"{tree_id} {actual_coeff}     {best_partition_coeff}      {supervised_imbalance}_ {sup_unsup_ratio_balance}       {attr_cluster_distance} {distance_avg} {1-s_score} {c_score} ")
                     
                     # we need to make sure that the partition will be fit enough after the iteration
                     left_supervised_objects = len(left_labels_index)
@@ -828,6 +836,8 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         # result = pool.map_async( self.generate_tree, [(ns,i) for i in range(0,self.trees_quantity)] ) # it takes 22 secs to end them all
         pool.close()
         print("trees generated")
+        
+        
         # pool.join()
         pbar = tqdm(total = self.trees_quantity)
 
@@ -978,7 +988,9 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             if col[0] in self.categoryMap:
                 X[col[0]] = X[col[0]].map( self.categoryMap[col[0]] )
             
-        
+        print("Check numba signatures...")
+        print_numba_signatures()
+
         pbar = tqdm(total = X.shape[0])
         for index, row in X.iterrows():
             # print(f"I'm trying with this one {index}")
@@ -1009,6 +1021,8 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             pbar.update(1)
         
         pbar.close()
+        print("Final numba signatures")
+        print_numba_signatures()
         return np.where( np.array(predictions)>=0.5,1,0 ) , np.array(probabilities)
 
 

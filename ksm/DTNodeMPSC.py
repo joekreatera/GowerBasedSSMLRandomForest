@@ -15,7 +15,7 @@ import sklearn
 from sklearn import manifold
 from .SSLearnerLeafNN import SSLearnerLeaf
 from sklearn.metrics.pairwise import  euclidean_distances
-from .utils import pairwise_distances
+from .utils import pairwise_distances, print_numba_signatures
 
 
 generator = default_rng()
@@ -219,7 +219,8 @@ class DecisionTreeNodeV2:
         structure["supervised"] = df[df[self.labels.columns[0]] > -1 ].index.array
         structure["unsupervised"] = df[df[self.labels.columns[0]] == -1 ].index.array
         
-
+        return structure
+    
         if(self.decision_columns is not None):
             colsA = set() if self.left is None else structure["left"]["joint_columns"] 
             colsB = set() if self.right is None  else structure["right"]["joint_columns"] 
@@ -319,6 +320,8 @@ class DecisionTreeNodeV2:
 
         left_distances = pairwise_distances(  val.to_numpy().reshape(1,-1) , left_side ,metric=self.hyper_params_dict['distance_function'] , min_max_array = [total_min,total_max] , cat_features=cat_feats )
         right_distances = pairwise_distances(  val.to_numpy().reshape(1,-1) , right_side,metric=self.hyper_params_dict['distance_function'] , min_max_array =  [total_min,total_max]  , cat_features=cat_feats )
+        print_numba_signatures()
+        
         #print( np.min(left_distances) , " ============ " , np.min(right_distances) )
         if( np.min(left_distances) < np.min(right_distances) ):
             

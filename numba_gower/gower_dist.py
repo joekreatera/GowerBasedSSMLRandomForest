@@ -25,7 +25,7 @@ procedure due to the radius (max-min) that is performed when obtaining the dista
 
 
 # we should cover two cases, the distance between the full matrix, and the distance from vector to matrix
-@njit(fastmath=True)
+@njit(fastmath=True, error_model='numpy') # error model comes from avoid implicit branching on divisions!
 def gower_distance_matrix(X,cat_cols , mn=None, mx = None):
     """
     Calculates de distance from every x_i in X to every other x_j in X. It generates the operations for (x_rows)(x_rows-1)/2 and copies the values to the rest of the matrix 
@@ -85,7 +85,7 @@ def gower_distance_matrix(X,cat_cols , mn=None, mx = None):
     return dm
 
 
-@njit(fastmath=True)
+@njit(fastmath=True, debug=True, error_model='numpy') # error model comes from avoid implicit branching on divisions!
 def gower_distance_vector_to_matrix(x , X,cat_cols , mn=None, mx = None):
     """
     Returns the distance from x to each X not including the distance from x to itself, which is 0. 
@@ -94,16 +94,24 @@ def gower_distance_vector_to_matrix(x , X,cat_cols , mn=None, mx = None):
     """
 
     m,n = X.shape
-    div  = numpy.zeros(n)
+    div  = numpy.zeros(n, dtype=numpy.float32)
     div_calc = numpy.zeros(n, dtype=numpy.int8) # needed to check which columns have already been computed. 
     do_min_max = mn is None
     
     M = X
-    res = numpy.zeros( M.shape[0] )
+    res = numpy.zeros( M.shape[0], dtype=numpy.float32 )
     
     cat_init = False
-
+    #print("1 this is insider woeert distance vector to matrix " , x)
+    #print("2 this is insider woeert distance vector to matrix " , M)
+    
     for col in range(X.shape[1]):
+        #print(f" ********* Cycling cols " , col)
+        #print(f" ********* Div calc " , div_calc[col] )
+        #print(f" ********* check calc " , (col not in cat_cols) )
+       
+        
+        
         if(div_calc[col]  == 0 ):
             if( col not in cat_cols ):
                 if do_min_max:
@@ -114,24 +122,32 @@ def gower_distance_vector_to_matrix(x , X,cat_cols , mn=None, mx = None):
                     nmx = mx[col] 
                 
                 # div[col] = numpy.abs(1 - nmn/nmx ) if( nmx != 0 ) else 0
-                div[col] = (nmx-nmn)+0.000000000001
+                div[col] = (nmx-nmn)+ numpy.float32(0.000000000001) 
                 div_calc[col] = 1
 
+        #print("-******* Cat init " , cat_init )
+        #print(f" ********* Div Afters calc " , div_calc[col] )
+        
         if( not  cat_init ):
             cat_init = True
             res += len(cat_cols)/n # initialize the categorical base value
-            div_calc[col] = 1
+            # div_calc[col] = 1 # doesnt matter for cat cols
         
+        #print(f" ********* Cat cols [0]  Afters calc " ,  (cat_cols[0] > -1) )
+
         if( cat_cols[0] > -1 and col  in cat_cols ): # we should convert the different columns to int values.
+            # print(" -*-*-*-*-*-*-**-*-*--*-*-*-* " ,  cat_cols[0]  )
             # the problem is that x[col] 
-            a1 = M[:,col].astype(numpy.int8)
-            print(x , " -> " ,  x.shape)
-            a2 = x[0,col].astype(numpy.int8)
+            a1 = M[:,col] # .astype(numpy.int8)
+            # print(x , " -> " ,  x.shape)
+            a2 = x[0,col] #.astype(numpy.int8)
             a3 = ( a1  == a2  ).astype(numpy.int8)
             res -=   ( a3 )/n
         else:
+            
             #res +=  numpy.absolute(x[col]-M[:,col])/div[col]/n
-            res += (numpy.abs(x[col]-M[:,col])/div[col] )/n
+            res += (numpy.abs(x[0,col]-M[:,col])/div[col] )/n
+            
 
-    print(res)
+    #print("Result of the function of distance " , res)
     return res.reshape(1,-1)

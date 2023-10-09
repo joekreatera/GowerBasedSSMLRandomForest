@@ -26,6 +26,9 @@ from itertools import chain
 from time import time
 from scipy.spatial.distance import cdist
 
+numba_signatures = dict()
+enable_signatures = False
+
 def multilabel_kfold_split(n_splits=5, shuffle=True, random_state= 180):
     return MultilabelStratifiedKFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
 
@@ -511,7 +514,16 @@ def pairwise_distances(X,Y=None,metric='euclidean', min_max_array = None, cat_fe
         if( X.shape[0] == 1 ):
             try:
                 mat = numba_gower.gower_distance_vector_to_matrix(X,Y, cat_cols=cats, mn=mn, mx=mx )
+
+                if(enable_signatures):
+                    if("gower_distance_vector_to_matrix" not in numba_signatures or len(numba_gower.gower_distance_vector_to_matrix.signatures) < len(numba_signatures["gower_distance_vector_to_matrix"]) ):
+                        numba_signatures["gower_distance_vector_to_matrix"] = numba_gower.gower_distance_vector_to_matrix.signatures
+                        i = 0
+                        for sig in range(0, len(numba_signatures["gower_distance_vector_to_matrix"])):
+                            sc = find_instr( numba_gower.gower_distance_vector_to_matrix , keyword='subp', sig=sig)
+                            numba_signatures[f"gower_distance_vector_to_matrix_sig_{sig}"] = sc
             except Exception as e:
+                print("Signatures! " , numba_gower.gower_distance_vector_to_matrix.signatures)
                 print(X, "  " , type(X))
                 print(Y, "  " , type(Y))
                 print(cats, "  " , type(cats))
@@ -519,6 +531,16 @@ def pairwise_distances(X,Y=None,metric='euclidean', min_max_array = None, cat_fe
                 raise e    
         else:
             mat =  numba_gower.gower_distance_matrix(X, cat_cols=cats, mn=mn, mx=mx ) # min_max_array=min_max_array
+            #print("***************   "  , numba_signatures)
+            #print("--------------- " , numba_gower.gower_distance_matrix.signatures)
+            
+            if(enable_signatures):
+                if("gower_distance_matrix" not in numba_signatures or len(numba_gower.gower_distance_matrix.signatures) < len(numba_signatures["gower_distance_matrix"]) ):
+                        numba_signatures["gower_distance_matrix"] = numba_gower.gower_distance_matrix.signatures
+                        i = 0
+                        for sig in range(0, len(numba_signatures["gower_distance_matrix"])):
+                            sc = find_instr( numba_gower.gower_distance_matrix , keyword='subp', sig=sig)
+                            numba_signatures[f"gower_distance_matrix_sig_{sig}"] = sc
         # print("Gower distance :", (time()-t1))
         return mat
     if(metric=='cosine'):
@@ -530,3 +552,19 @@ def pairwise_distances(X,Y=None,metric='euclidean', min_max_array = None, cat_fe
         return cosine_distances(X,Y=Y)
     
     return None
+
+
+def print_numba_signatures():
+    pass
+    #print("print on this thread _______________ analysis")
+    #print(numba_signatures)
+    
+
+def find_instr(func, keyword, sig=0, limit=5):
+    count = 0
+    for l in func.inspect_asm(func.signatures[sig]).split('\n'):
+        if keyword in l:
+            count += 1
+            if count >= limit:
+                return count
+    return count

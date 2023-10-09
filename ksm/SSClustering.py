@@ -267,15 +267,22 @@ class SSClustering(BaseEstimator, ClassifierMixin):
             x_to_predict = X
         final_prediction = numpy.zeros(shape=(x_to_predict.shape[0],self.n_clusters))
         
+        #print("Cluster index " ,  self.clusters_index )
         for cluster in range(0,self.n_clusters): # the "2" should be the cluster quantity
+            
             if( distance_matrix is None ): # use our own distance matrix
+                #print(f"Indices of the cluster {cluster}" ,  self.clusters_index[cluster])
                 #print(X)
-                #print(self.clusters_index[cluster])
                 #print("cluster " , cluster)
                 supervised_feature_space = X.loc[self.clusters_index[cluster]].to_numpy()
                 #print("supervised_feature_space "  , supervised_feature_space)
                 if(self.use_gower):
-                    distance_matrix1 = pairwise_distances(x_to_predict, supervised_feature_space, metric="gower")
+                    # yet to be answered:
+                    # what about the min and max that should be considered form the while local dataset. 
+                    # we should input them here
+                    #
+                    distance_matrix1 = pairwise_distances(supervised_feature_space,x_to_predict, metric="gower")
+                    distance_matrix1 = distance_matrix1.reshape(-1,1) # it comes in one row
                 else:
                     distance_matrix1 = pairwise_distances(x_to_predict, supervised_feature_space, metric="euclidean")
                 #print(distance_matrix1)
@@ -289,9 +296,10 @@ class SSClustering(BaseEstimator, ClassifierMixin):
             #print("closest_ones\n",closest_ones)
             final_prediction[:,cluster] = closest_ones[:,0]
         
+        #print("Final prediction;: " , final_prediction)
         final_prediction = numpy.argsort(final_prediction)
         final_prediction = final_prediction[:,0]
-        #print("************" , final_prediction)
+        # print("************" , final_prediction)
         # print("++++++++++++++" , fixed_points)
         final_prediction = numpy.minimum(final_prediction, fixed_points)
         final_prediction = numpy.where( final_prediction == -2 , 0, final_prediction)
