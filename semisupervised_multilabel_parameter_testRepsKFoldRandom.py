@@ -323,13 +323,13 @@ def train():
         results_prob = pd.DataFrame(probabilities)
         results_true = pd.DataFrame(y_true)
 
-        parameters["auprc_curve_average_k_fold"] = auprc_curve/k_fold
-        parameters["label_rank_average_precision_average_k_fold"] = label_rank_average_precision/k_fold
-        parameters["average_precision_average_k_fold"] = average_precision/k_fold
-        parameters["auc_micro_average_k_fold"] = auc_micro/k_fold
-        parameters["auc_macro_average_k_fold"] = auc_macro/k_fold
-        parameters["hamming_loss_average_k_fold"] = hamming_loss/k_fold
-        parameters["accuracy_average_k_fold"] = accuracy/k_fold
+        params["auprc_curve_average_k_fold"] = auprc_curve/k_fold
+        params["label_rank_average_precision_average_k_fold"] = label_rank_average_precision/k_fold
+        params["average_precision_average_k_fold"] = average_precision/k_fold
+        params["auc_micro_average_k_fold"] = auc_micro/k_fold
+        params["auc_macro_average_k_fold"] = auc_macro/k_fold
+        params["hamming_loss_average_k_fold"] = hamming_loss/k_fold
+        params["accuracy_average_k_fold"] = accuracy/k_fold
 
         # as only the last model is kept, we are trusting that the performance is pretty close to the average
         o = save_report( model_path + '/', ds_name+f"kfold_", y_true, predictions, probabilities, do_output=True, parameters=params)
@@ -338,7 +338,7 @@ def train():
 
 
     df = pd.DataFrame(data=final_list)
-    df.to_csv('all_params_kfold.csv')
+    df.to_csv(f'all_{ds_name}_params_kfold.csv')
     
 
 
