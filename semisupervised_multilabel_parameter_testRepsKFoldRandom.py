@@ -79,14 +79,15 @@ def calculate_parameters(params_dict):
 
 def train():
     # for linux platforms, could be forkserver, fork, spawn.... forkserver works in mac
-    mp.set_start_method('forkserver')
-    ds_name = "flags"
+    if( sys.platform.find('linux') > -1 ):
+        mp.set_start_method('forkserver')
+    ds_name = "water"
 
     print("Cpus " , mp.cpu_count() )
     print("Info " , platform.processor() )
     print("Sys " , sys.version_info )
     
-    total_jobs = 3
+    total_jobs = 6
     ds_configs = {
     "emotions":6, # multilabel
     "yeast_multi":14, # multilabel
@@ -130,7 +131,7 @@ def train():
     for label in label_columns:
         dataset[label] = pd.to_numeric( dataset[label] , downcast="unsigned" )
 
-    a = 10
+    a = 3
     for col in get_features(dataset, label_columns):
         if(dataset[col].dtype == 'float64'):
             dataset[col] = pd.to_numeric( dataset[col] , downcast="float" )
@@ -201,7 +202,7 @@ def train():
 
     parameters = {
     'a_r':a,    
-    'trees_quantity':(int, 20,130), # 20- 130
+    'trees_quantity':(int, 4,4), # 20- 130
     "M_groups":(int,35,120), # 35 - 120 
     "N_attr":(int, 2**5-1 , 2**16+1 ),
     'leaf_relative_instance_quantity':(float,0.05,0.17), 
