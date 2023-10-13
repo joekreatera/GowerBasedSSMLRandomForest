@@ -80,14 +80,14 @@ def calculate_parameters(params_dict):
 def train():
     # for linux platforms, could be forkserver, fork, spawn.... forkserver works in mac
     if( sys.platform.find('linux') > -1 ):
-        mp.set_start_method('forkserver')
-    ds_name = "emotions"
+        mp.set_start_method('spawn') # tried all in ubuntu... forkserver eventually had a broken pipe error. 
+    ds_name = "water"
 
     print("Cpus " , mp.cpu_count() )
     print("Info " , platform.processor() )
     print("Sys " , sys.version_info )
     
-    total_jobs = 6
+    total_jobs = 8
     ds_configs = {
     "emotions":6, # multilabel
     "yeast_multi":14, # multilabel
@@ -248,7 +248,7 @@ def train():
     best_label_rank = 0
 
     #for parameters in list(param_grid):
-    for i in range(1):
+    for i in range(3):
         params = calculate_parameters(parameters)
 
         print(params)
