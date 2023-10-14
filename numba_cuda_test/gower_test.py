@@ -16,7 +16,7 @@ print(cuda.devices)
 print(cuda.is_available())
 print(cuda.detect())
 total_rows = 4096
-threads_per_block = int(sqrt(128)) # cause it is an area... top is 1024
+threads_per_block = int(sqrt(512)) # cause it is an area... top is 1024
 A = np.random.random( (total_rows,20) ).astype(np.float32)
 D_cuda = cuda.device_array((total_rows,total_rows), dtype=A.dtype)
 
