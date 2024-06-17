@@ -554,6 +554,66 @@ def pairwise_distances(X,Y=None,metric='euclidean', min_max_array = None, cat_fe
     return None
 
 
+def generate_explainable_datasets(rules_df, activations_df, labels_columns):
+    rules_df.set_index("id", inplace=True)
+    grouped = activations_df.groupby("id")
+    df_count = grouped.count()["node_id"]
+
+    df_macro_f1 = grouped.sum()
+    results_by_class_f1 =pd.DataFrame()
+    results_by_class_p = pd.DataFrame()
+    results_by_class_r = pd.DataFrame()
+
+    first = True
+    for i in labels_columns:
+        a = (2*df_macro_f1[f"{i}_tp"])/(  2*df_macro_f1[f"{i}_tp"] +  df_macro_f1[f"{i}_fp"] + df_macro_f1[f"{i}_fn"]  )
+        b = (df_macro_f1[f"{i}_tp"])/(   df_macro_f1[f"{i}_tp"] + df_macro_f1[f"{i}_fp"]  )
+        c = (df_macro_f1[f"{i}_tp"])/(    df_macro_f1[f"{i}_tp"] + df_macro_f1[f"{i}_fn"]  )
+
+        if(first):
+            first = False
+            results_by_class_f1.index = a.index  
+            results_by_class_p.index = b.index
+            results_by_class_r.index = c.index
+
+        results_by_class_f1[f"{i}"] = a.values
+        results_by_class_p[f"{i}"] = b.values
+        results_by_class_r[f"{i}"] = c.values
+
+    results_by_class_f1.fillna(0, inplace=True)
+    results_by_class_f1["macro_f1_score"] = results_by_class_f1.mean(axis=1)
+    results_by_class_f1["activations"] = df_count
+
+    results_by_class_p.fillna(0, inplace=True)
+    results_by_class_p["macro_precision_score"] = results_by_class_p.mean(axis=1)
+    results_by_class_p["activations"] = df_count
+
+    results_by_class_r.fillna(0, inplace=True)
+    results_by_class_r["macro_recall_score"] = results_by_class_r.mean(axis=1)
+    results_by_class_r["activations"] = df_count
+    
+    rules_df["activations"] = df_count
+    rules_df["macro_f1"] = results_by_class_f1["macro_f1_score"]
+    rules_df["macro_precision"] = results_by_class_p["macro_precision_score"]
+    rules_df["macro_recall"] = results_by_class_r["macro_recall_score"]
+
+
+    df_micro_f1 = df_macro_f1
+
+    df_micro_f1[f"labels_tp"] = df_micro_f1[ [s+"_tp" for s in labels_columns] ].sum(axis=1)
+    df_micro_f1[f"labels_fp"] = df_micro_f1[ [s+"_fp" for s in labels_columns] ].sum(axis=1)
+    df_micro_f1[f"labels_fn"] = df_micro_f1[ [s+"_fn" for s in labels_columns] ].sum(axis=1)
+
+    df_micro_f1 = df_micro_f1[ [ "labels_tp" , "labels_fp" , "labels_fn"]  ]
+    df_micro_f1["micro_f1_score"] = (2*df_micro_f1[f"labels_tp"])/( 2*df_micro_f1[f"labels_tp"] +  df_micro_f1[f"labels_fp"]  +  df_micro_f1[f"labels_fn"]  ) 
+    df_micro_f1["micro_precision_score"] = (df_micro_f1[f"labels_tp"])/(  df_micro_f1[f"labels_tp"]  +  df_micro_f1[f"labels_fp"]  )
+    df_micro_f1["micro_recall_score"] = (df_micro_f1[f"labels_tp"])/(  df_micro_f1[f"labels_tp"]  +  df_micro_f1[f"labels_fn"]  )
+
+    rules_df["micro_f1"] = df_micro_f1["micro_f1_score"]
+    rules_df["micro_precision"] = df_micro_f1["micro_precision_score"]
+    rules_df["micro_recall"] = df_micro_f1["micro_recall_score"]
+    
+
 def print_numba_signatures():
     pass
     #print("print on this thread _______________ analysis")

@@ -615,14 +615,14 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
                 merged["center"] = 0
                 if( cluster_centers is not None):
                     merged.loc[cluster_centers[0] , "center"] = 1
-                merged.to_csv(f"emotions_nodes_story/{tree_id}_{node.level+1}_{m}_{iteration}_internal_left_{uuid.uuid4()}_{actual_coeff}.csv")
+                merged.to_csv(f"nodes_story/{tree_id}_{node.level+1}_{m}_{iteration}_internal_left_{uuid.uuid4()}_{actual_coeff}.csv")
 
                 merged = pd.concat( [instances.loc[right_final_cluster_index,columns_to_select], labels.loc[right_final_cluster_index, :] ] , axis=1)
                 merged["cluster"] = 1
                 merged["center"] = 0
                 if(cluster_centers is not None):
                     merged.loc[cluster_centers[1] , "center"] = 1
-                merged.to_csv(f"emotions_nodes_story/{tree_id}_{node.level+1}_{m}_{iteration}_internal_right_{uuid.uuid4()}_{actual_coeff}.csv")
+                merged.to_csv(f"nodes_story/{tree_id}_{node.level+1}_{m}_{iteration}_internal_right_{uuid.uuid4()}_{actual_coeff}.csv")
 
 
             #print("Columns History time: " , (time() - columns_history_time) )
@@ -955,6 +955,17 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         # print(highly_correlated[:,1])
         return np.mean(highly_correlated)
 
+    def get_tree_structure_df(self, rules_list):
+
+        print("Obtaining trees structure DATAFRAME")
+        pb = tqdm(total = len(self.trees) )
+        for tree in self.trees :
+            # print(tree.root.instance_index)
+            tree.root.get_structure_df(rules_list , 0 )
+            pb.update(1)
+        # the methods modify rules_db
+
+        
 
     def get_tree_structure(self, true_y_df):
 
@@ -963,7 +974,7 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         structure = []
         for tree in self.trees :
             # print(tree.root.instance_index)
-            structure.append( tree.root.get_structure(true_y_df) ) 
+            structure.append( tree.root.get_structure(true_y_df ) ) 
             pb.update(1)
         return structure
     
@@ -972,7 +983,7 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
         pred, prob =  self.predict_with_proba(X,print_prediction_log)
         return pred
 
-    def predict_with_proba(self, X, print_prediction_log=False ,y_true = None):
+    def predict_with_proba(self, X, print_prediction_log=False ,y_true = None, activations_list = None, explain_decisions = False):
         # check_is_fitted(self)
         #predictions = np.zeros(shape=[self.labels.shape[1]])
         #probabilities = np.zeros(shape=[self.labels.shape[1]])
@@ -988,10 +999,14 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             if col[0] in self.categoryMap:
                 X[col[0]] = X[col[0]].map( self.categoryMap[col[0]] )
             
-        print("Check numba signatures...")
-        print_numba_signatures()
+        #print("Check numba signatures...")
+        #print_numba_signatures()
 
         pbar = tqdm(total = X.shape[0])
+        rule_explanations = []
+        if( y_true is not None):
+            df_activations = pd.DataFrame()
+
         for index, row in X.iterrows():
             # print(f"I'm trying with this one {index}")
             tree_counter = 0
@@ -1001,9 +1016,19 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             for tree in self.trees:
                 # print(f"tree {tree_counter}")
                 tree_counter += 1
-                prd, prb = tree.root.predict_with_proba(row, original_labels=y_true[y_counter] if y_true is not None else None)
+
+                rule_explain_dict = None
+                if(explain_decisions):
+                    rule_explain_dict = row.to_dict()
+
+                if y_true is not None:
+                    prd, prb = tree.root.predict_with_proba(row, original_labels=y_true[y_counter] , activations_list = activations_list, explain_decisions = explain_decisions, rule_explain_dict=rule_explain_dict)
+                else:
+                    prd, prb = tree.root.predict_with_proba(row, original_labels=None, explain_decisions = explain_decisions, rule_explain_dict=rule_explain_dict)
+                    
                 #print(prd)
-                
+                if( explain_decisions ):
+                    rule_explanations.append(rule_explain_dict)
                 # turn off when testing probabiluty based majority voting
                 instance_prediction +=  np.array( prd)/len(self.trees)
                 instance_probability += np.array( prb)/len(self.trees)
@@ -1019,10 +1044,22 @@ class SSMLKVForestPredictor(BaseEstimator, ClassifierMixin):
             
             # 0.4 could be moved... based on calibration,  this is joining all the trees
             pbar.update(1)
+
+            if(explain_decisions):
+                rule_explain_dict = row.to_dict()
+                rule_explain_dict["final_decision"]= np.where( np.array(instance_prediction)>=0.5,1,0 ) 
+                rule_explain_dict["final_decision_probs"]=instance_probability
+                rule_explanations.append(rule_explain_dict)
+
         
         pbar.close()
-        print("Final numba signatures")
-        print_numba_signatures()
+        #print("Final numba signatures")
+        #print_numba_signatures()
+
+        if(explain_decisions):
+            rdf = pd.DataFrame(rule_explanations)
+            rdf.to_csv("explanations.csv")
+    
         return np.where( np.array(predictions)>=0.5,1,0 ) , np.array(probabilities)
 
 

@@ -103,13 +103,14 @@ class SSLearnerLeaf(BaseEstimator, ClassifierMixin):
             for label in self.columns:
                 
 
-                
+                #print(f"{tree_id} label " )
                 values = numpy.unique(train_labels[train_labels[label] != -1][label].to_numpy())
                 if(len(values) == 1):
-                    # cant do no more
+                    # cant do no more.
+                    # print(f"cant do more all labeels are the same tree {tree_id}")
                     complete_labels.append( numpy.ones(shape=train_labels[label].to_numpy().shape)*values[0] )
-                    #print("full out " , values[0])
-                    #print(complete_labels[-1])
+                    #print(f"{tree_id} full out {values[0]} :: " , train_labels[train_labels[label] != -1][label].to_numpy() )
+                    #print(complete_labels)
                     continue
                 #kernel =  rbf_kernel_safe # rbf_kernel_safe,linear_kernel, laplacian_kernel, polynomial_kernel, rbf_kernel, sigmoid_kernel
                 #semisup_model = LabelSpreading(gamma=self.hyper_params_dict["gamma"], max_iter=60, alpha=self.hyper_params_dict["alpha"], kernel=kernel)
@@ -259,7 +260,7 @@ class SSLearnerLeaf(BaseEstimator, ClassifierMixin):
                     imbalance_compensation = (0.95*zero_compensation , 0.95*one_compensation ) 
                     self.thresholds.append(imbalance_compensation)
             i+=1
-        
+        return complete_labels
         # print( "Thresholds" + str([m[1] for m in self.thresholds ]) )
         # return pandas.DataFrame(data=kernelized_train_set, columns=train_set.index, index=train_set.index ), to_print_df
         # no need for complete_labels structure anymore
@@ -271,8 +272,22 @@ class SSLearnerLeaf(BaseEstimator, ClassifierMixin):
         # check_is_fitted(self)
         pred, prob =  self.predict_with_proba(X)
         return prob
-        
-    def predict_with_proba(self, X, optional_global_labels_distribution = None):
+    
+    def get_models_feature_importance(self):
+        frs = []
+        if ( self.models is not None and len(self.models) > 0 ):
+            for i in self.models:
+                
+                if( type(i) is RandomForestClassifier):
+                    forest_fi = i.feature_importances_ # there is a technique for permutation feature importance, less biased, not implemented
+                    frs.append(  forest_fi )
+                else:
+                    frs.append(0)
+        else:
+            return [0 for i in self.columns] # not tested
+        return frs
+
+    def predict_with_proba(self, X, optional_global_labels_distribution = None, y_true = None):
 
         
         pred = numpy.zeros(shape=(X.shape[0],self.output_features_) )

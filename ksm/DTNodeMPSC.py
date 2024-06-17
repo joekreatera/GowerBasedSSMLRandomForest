@@ -48,6 +48,7 @@ class DecisionTreeNodeV2:
         self.left = None
         self.level = level
         self.label_vector = None
+        self.label_vector_mean = None
         self.right_centroid = None 
         self.left_centroid = None
         self.tree_id = tree_id
@@ -180,8 +181,11 @@ class DecisionTreeNodeV2:
             self.model.set_dataset_indices(self.instance_index )
             #self.model.set_dataset_indices(supervised_instances )
             
-            self.model.fit(self.dataset,self.labels, self.tree_id, self.level ) # , self.parent.decision_columns for the test of KNN 
+            complete_labels = self.model.fit(self.dataset,self.labels, self.tree_id, self.level ) # , self.parent.decision_columns for the test of KNN 
             # self.draw_data_set(dataset=instance_space, labelset =label_space )
+
+            # self.label_vector = np.array(complete_labels).mean(axis=0)
+            self.label_vector_mean = np.array(complete_labels).mean(axis=1) # do not yse label_vector to set this, as this conflicts with a decision inside predict_with_proba
         else:
             dataset = self.labels.loc[self.instance_index]
             #print(dataset)
@@ -191,6 +195,7 @@ class DecisionTreeNodeV2:
             label_vector = labels.to_numpy().mean(axis=0)
             #print(f'Label vector is {label_vector}')
             self.label_vector = label_vector
+            self.label_vector_mean = label_vector
         
     def get_draw_repr(self):
         # print(f' exporting {self.id} parent : {self.parent.id if self.parent is not None else -1 }')
@@ -200,6 +205,65 @@ class DecisionTreeNodeV2:
         return me + '\n' + left + '\n' + right
     
 
+    def get_structure_df(self, rules_list, depth, columns_subset = set() ):
+        structure = {"left":None, "right":None}
+        if( self.parent is not None):
+            structure["parent_id"] = self.parent.id
+
+        if self.left is not None:
+            structure["left"] = self.left.id 
+            self.left.get_structure_df(rules_list, depth, set(self.decision_columns).union( columns_subset )  )
+        
+        if self.right is not None: 
+            structure["right"] = self.right.id 
+            self.right.get_structure_df(rules_list, depth, set(self.decision_columns).union( columns_subset ) )
+
+        # centroid = self.dataset.loc[self.instance_index].mean(axis=0)
+        # structure["centroid"] = centroid
+        #for col in self.dataset.columns:
+        #    structure[f"c_{col}"] = centroid[col]
+
+        structure["depth"] = depth + 1
+        structure["index"] = list(self.instance_index.array)
+        structure["index_count"] = len(self.instance_index.array)
+        
+        structure["node_id"] = self.id
+        structure["tree_id"] = self.tree_id
+       
+        if( not self.is_leaf ):
+            for cn in self.decision_columns:
+                structure[cn] = 1
+           
+
+        structure["is_leaf"] = self.is_leaf
+        
+        structure["supervised"] = self.labels.loc[self.instance_index.array]
+        df = structure["supervised"]
+        structure["supervised"] = list(df[df[self.labels.columns[0]] > -1 ].index.array)
+        structure["unsupervised"] = list(df[df[self.labels.columns[0]] == -1 ].index.array)
+
+        structure["supervised_count"] = len(df[df[self.labels.columns[0]] > -1 ].index.array)
+        structure["unsupervised_count"] = len(df[df[self.labels.columns[0]] == -1 ].index.array)
+        
+        counter = 0
+        
+        if( self.is_leaf): # includes transductive learning 
+            arr = self.model.get_models_feature_importance()
+            for i,a in zip(self.label_vector_mean, arr):
+                structure[f"label_{counter}"] = i
+                structure[f"model_{counter}"] = a
+                counter += 1
+
+            min_max_values = dict()
+            for c in  columns_subset:
+                data = self.dataset.loc[self.instance_index]
+                min_max_values[c] = (data[c].min(), data[c].max())
+                
+            structure["mm_limits"] = min_max_values
+            structure["pred_label_probs"] = self.label_vector_mean               
+        
+        rules_list.append(structure)
+
     def get_structure(self, true_y_df):
         structure = {"left":None, "right":None}
 
@@ -207,7 +271,7 @@ class DecisionTreeNodeV2:
         structure["left"] = None if self.left is None else self.left.get_structure(true_y_df)
         structure["right"] = None if self.right is None else self.right.get_structure(true_y_df)
 
-        structure["depth"] = 1 + max( 0 if self.left is None else structure["left"]["depth"], 0 if self.right is None else structure["left"]["depth"] )
+        structure["depth"] = 1 + max( 0 if self.left is None else structure["left"]["depth"], 0 if self.right is None else structure["right"]["depth"] )
         structure["index"] = self.instance_index.array
         structure["node_id"] = self.id
         structure["tree_id"] = self.tree_id
@@ -220,13 +284,6 @@ class DecisionTreeNodeV2:
         structure["unsupervised"] = df[df[self.labels.columns[0]] == -1 ].index.array
         
         return structure
-    
-        if(self.decision_columns is not None):
-            colsA = set() if self.left is None else structure["left"]["joint_columns"] 
-            colsB = set() if self.right is None  else structure["right"]["joint_columns"] 
-            structure["joint_columns"] = set(self.decision_columns).union(colsA).union(colsB)
-        else:
-            structure["joint_columns"] = set()
 
         distance_matrix = pairwise_distances( true_y_df.loc[self.instance_index.array].to_numpy(), metric='cosine')
         this_avg = 0
@@ -257,12 +314,15 @@ class DecisionTreeNodeV2:
 
         return structure
 
-    def predict_with_proba(self, row, original_labels=None):
+    def predict_with_proba(self, row, original_labels=None, activations_list = None, explain_decisions = False, rule_explain_dict = None ):
         #print(row)
         
         val = None 
         
         if( self.label_vector is not None):
+            if(explain_decisions):
+                step = len(rule_explain_dict) - row.shape()[0]
+                rule_explain_dict[f"step_{step+1}"] = f"[{self.tree_id}_{self.node_id}] label_vector_all_simple_model:{np.where(self.label_vector >= 0.5,1,0)}"
             return np.where(self.label_vector >= 0.5,1,0) , self.label_vector
             
         if( self.decision_columns is not None): # this does not happens on leaves
@@ -274,18 +334,53 @@ class DecisionTreeNodeV2:
             r = np.array([row.to_numpy()])
             pred, prob = self.model.predict_with_proba(r, self.global_labels_distribution)
 
+            if(explain_decisions):
+                step = len(rule_explain_dict) - row.shape[0]
+                #rule_explain_dict[f"step_{step+1}"] = f"[{self.tree_id}_{self.id}] model_decision:{pred}({prob})"
+                rule_explain_dict[f"final_decision_node_id"] = f"{self.tree_id}_{self.id}"
+                rule_explain_dict[f"final_decision"] = f"{pred}"
+                rule_explain_dict[f"final_decision_probs"] = f"{prob}"
+
+
+            if(activations_list is not None):
+                # output id, tree id, predicted vector, real vector (should have original_labels set), TP FP TN FN count
+                # ideally the label vector should be separated in columns. 
+                # 
+                activation = {'node_id':self.id , 'tree_id':self.tree_id}
+                counter = 0
+                for lpd, lpr in zip(pred, prob): 
+                    activation[f"label_{counter}_pred"] = lpd
+                    activation[f"label_{counter}_prob"] = lpr
+                    activation[f"label_{counter}_real"] = original_labels[counter]
+                    if( lpd ==  original_labels[counter] ):
+                        if( lpd == 1):
+                            activation[f"label_{counter}_tp"] = 1
+                            activation[f"label_{counter}_tn"] = 0
+                            activation[f"label_{counter}_fp"] = 0
+                            activation[f"label_{counter}_fn"] = 0
+                        if( lpd == 0):
+                            activation[f"label_{counter}_tp"] = 0
+                            activation[f"label_{counter}_tn"] = 1
+                            activation[f"label_{counter}_fp"] = 0
+                            activation[f"label_{counter}_fn"] = 0
+                    if( lpd !=  original_labels[counter] ):
+                        if( lpd == 1):
+                            activation[f"label_{counter}_tp"] = 0
+                            activation[f"label_{counter}_tn"] = 0
+                            activation[f"label_{counter}_fp"] = 1
+                            activation[f"label_{counter}_fn"] = 0
+                        if( lpd == 0):
+                            activation[f"label_{counter}_tp"] = 0
+                            activation[f"label_{counter}_tn"] = 0
+                            activation[f"label_{counter}_fp"] = 0
+                            activation[f"label_{counter}_fn"] = 1      
+                    counter += 1
+                
+                activations_list.append(activation)
             # pred = pred[0]
             return pred, prob
             
-        # print(f'{self.left_centroid.to_numpy()} {self.right_centroid.to_numpy()} {val.to_numpy()}')
         
-        # distances
-        
-        # we could calculate only a centroid over all the decision columns
-        # and the total_min and total_max could be just another variable... <---- optimization. 
-        # if we need the data, is already on the next nodes. On prediction we could make things 
-        # a little bit quicker
-        # could also test if its better to get all the instances, just the supervised ones, or a weight between them 
         left_side = self.dataset.loc[ self.left.instance_index , self.decision_columns ].to_numpy()
         right_side = self.dataset.loc[ self.right.instance_index , self.decision_columns ].to_numpy()
 
@@ -320,14 +415,66 @@ class DecisionTreeNodeV2:
 
         left_distances = pairwise_distances(  val.to_numpy().reshape(1,-1) , left_side ,metric=self.hyper_params_dict['distance_function'] , min_max_array = [total_min,total_max] , cat_features=cat_feats )
         right_distances = pairwise_distances(  val.to_numpy().reshape(1,-1) , right_side,metric=self.hyper_params_dict['distance_function'] , min_max_array =  [total_min,total_max]  , cat_features=cat_feats )
-        print_numba_signatures()
+        # print_numba_signatures()
         
+        if( explain_decisions ):
+            # get the selected properties from test row, left min row and right min row 
+            
+            
+            instanceL_values = left_side[np.argmin(left_distances)]
+            instanceR_values = right_side[np.argmin(right_distances)]
+            ld = np.min(left_distances) 
+            rd = np.min(right_distances)
+
+            # print(f":: {left_distances} \n {right_distances} indices {instanceL} {instanceR} ")
+            #print(f":: {self.left.instance_index} indices {instanceL} {instanceR} ")
+            
+            symb = ">"
+            w_l = False # won left
+            if(ld < rd):
+                w_l = True # won left
+                symb = "<"
+            
+            c_i = 0
+            v = val.to_numpy().reshape(1,-1)
+            for col in self.decision_columns: # determine thje range/region of values to get here
+                if(f'exp_{col}' not in rule_explain_dict):
+                    rule_explain_dict[f'exp_{col}'] = []
+                test_v = instanceL_values[c_i] if w_l else instanceR_values[c_i]
+
+                if( v[0,c_i] < test_v ):
+                    mod=False
+                    
+                    for i_index,prev_range in  zip(  range(0, len(rule_explain_dict[f'exp_{col}']) ) ,rule_explain_dict[f'exp_{col}']):
+                        if(prev_range[1] == '<='):
+                            mod = True # the range will be considered anyway
+                            if(test_v > prev_range[2] ):
+                                rule_explain_dict[f'exp_{col}'][i_index][2] = test_v
+                                rule_explain_dict[f'exp_{col}'][i_index].append("e")
+                    if not mod:
+                        rule_explain_dict[f'exp_{col}'].append( [v[0,c_i] , '<=',test_v ] )
+                else:
+                    mod=False
+                    
+                    for i_index,prev_range in  zip(  range(0, len(rule_explain_dict[f'exp_{col}']) ) ,rule_explain_dict[f'exp_{col}']):
+                        if(prev_range[1] == '>='):
+                            mod = True # the range will be considered anyway
+                            if(test_v < prev_range[2] ):
+                                rule_explain_dict[f'exp_{col}'][i_index][2] = test_v
+                                rule_explain_dict[f'exp_{col}'][i_index].append("e")
+                    if not mod:
+                        rule_explain_dict[f'exp_{col}'].append( [v[0,c_i] , '>=',test_v ] )
+                
+                c_i +=1
+            step = len(rule_explain_dict) - row.shape[0]
+            rule_explain_dict[f"step_{step+1}"] = f"{ld} {symb} {rd} -> {list(instanceL_values)} {list(instanceR_values)} cols: {self.decision_columns}"
+            
         #print( np.min(left_distances) , " ============ " , np.min(right_distances) )
         if( np.min(left_distances) < np.min(right_distances) ):
             
-            p1,p2 = self.left.predict_with_proba(row, original_labels=original_labels)
+            p1,p2 = self.left.predict_with_proba(row, original_labels=original_labels, activations_list=activations_list, explain_decisions = explain_decisions, rule_explain_dict=rule_explain_dict)
             return p1, p2
-        p1, p2 = self.right.predict_with_proba(row, original_labels=original_labels)
+        p1, p2 = self.right.predict_with_proba(row, original_labels=original_labels, activations_list=activations_list, explain_decisions = explain_decisions, rule_explain_dict=rule_explain_dict)
         return p1, p2 
             
             

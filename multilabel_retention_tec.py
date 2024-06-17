@@ -87,7 +87,7 @@ def train():
     # for linux platforms, could be forkserver, fork, spawn.... forkserver works in mac
     if( sys.platform.find('linux') > -1 ):
         mp.set_start_method('spawn') # tried all in ubuntu... forkserver eventually had a broken pipe error. 
-    ds_name = "cal500" # changed specs recently for explain tests... original parameters are overriden only. 
+    ds_name = "retention_preprocessed_numeric" # changed specs recently for explain tests... original parameters are overriden only. 
 
     print("Cpus " , mp.cpu_count() )
     print("Info " , platform.processor() )
@@ -95,27 +95,7 @@ def train():
     
     total_jobs = 4
     ds_configs = {
-    "emotions":6, # multilabel
-    "yeast_multi":14, # multilabel
-    "birds":19,
-    'flags':7,
-    'cal500':174,
-    'slashdot':21,
-    'enron':53,
-    'water':14,
-    'medical':45,
-    'foodtruck':12,
-    'plantgo':12,
-    'eukaryote':22,
-    'genbase':27,
-    'gonegative': 8,
-    'humanpse': 14,
-    'plantpse':12,
-    '3sourcesbbc':6,
-    'chd49':6,
-    'mediamill':101,
-    'scene':6,
-    'image':5,
+    "retention_preprocessed_numeric":83, # multilabel
     }
     # getFromOpenML will convert automatically the classes found to a mutually exclusive multilabel
     print(training_path)
@@ -133,7 +113,11 @@ def train():
     #    dataset["col_68"] = dataset["col_68"].astype(str)
 
     # multilabel_dataset = transform_multiclass_to_multilabel(dataset, "label_0") # will expand label_0 to the unique values , mutually exclusive as labels
-    label_columns = [f"label_{i}" for i in range(0,ds_configs[ds_name])]  # for iris (3) ,for yeast(10) for ecoli(8), satimage(6)
+    
+    #label_columns = [f"label_{i}" for i in range(0,ds_configs[ds_name])]  # for iris (3) ,for yeast(10) for ecoli(8), satimage(6)
+    label_columns = [f"{i}" for i in dataset.columns if i.find("_") > -1 and i.find("_sc") <= -1 ]
+    
+
     # convert dataframe to its minimum size possible
     for label in label_columns:
         dataset[label] = pd.to_numeric( dataset[label] , downcast="unsigned" )
@@ -148,10 +132,10 @@ def train():
 
 
         
-        if( random() > 0.3): # test the other meth
-            a = 1
-        if dataset[col].nunique() < a: # this could change regarding the dataset, for experiments we could try both, or leave it equal to 0
-            dataset[col]  =  dataset[col].astype(str)
+        #if( random() > 0.3): # test the other meth
+        #    a = 1
+        #if dataset[col].nunique() < a: # this could change regarding the dataset, for experiments we could try both, or leave it equal to 0
+        #    dataset[col]  =  dataset[col].astype(str)
 
     print("Dataset memory usage AFTER conversion" , dataset.memory_usage(index=True).sum() )
     #unique_values_count = dataset.nunique() # different values on each column 
@@ -162,63 +146,20 @@ def train():
     # print(unique_values_count)
     # exit()od on some
 
-    # alpha is used for the ridge classifier 
-    # gamma is used for the label spreading 
-    # alpha prime is used for label_spreading alpha 
-    # beta is used to control the amount of ridge 
-
-    alpha_collection = [50,100]
-    alpha_prime_collection = [0.3,0.7]
-    beta_collection = [0.3,0.5,0.7] 
-    gamma_collection = [50,100]
-    trees_collection = [50,100]
-    leafs_collection = [0.05,0.1,0.15]
-
-
-    # alpha is used for the ridge classifier 
-    # gamma is used for the label spreading 
-    # alpha prime is used for label_spreading alpha 
-    # beta is used to control the amount of ridge 
-    # parameters = {'trees_quantity':1,'alpha':-1.0, 'C':10, 'eta':0.25, 'gamma':0.001,"M_groups":2, "N_attr":6, 'leaf_relative_instance_quantity':0.05 }
-    #parameters = {'trees_quantity':10,'alpha':-1.0, 'C':1 , 'eta':0.01, 'gamma':4,"M_groups":5, "N_attr":15, 'leaf_relative_instance_quantity':0.10, 'scaler':scaler }
-    scaler = None
-    parameters = {'p':[.4,.1,.1,.4], 'q':[.5,.3,.2], 'trees_quantity':10,'alpha':-1.0, 'C':1 , 'eta':0.01, 'gamma':4,"M_groups":5, "N_attr":15, 'leaf_relative_instance_quantity':0.10, 'scaler':scaler, 'do_ranking_split':False }
-    gamma_collection = [1] # altamente dependiente del dataset ooooo , es necesario escalarlo todo
-    trees_collection = [50]
-    leafs_collection = [0.05]
-    m_collection  = [15] # groups, normally we user 8,14,20
-    n_collection  = [128,512] # attributes ... 1,20,40,60,80
-    scaler_collection = [None]
-    do_ranking_split_collection = [True]
-    p_collection = [[0.70,0.06,0.06,0.06,0.06,0.06]]
-    complex_model_collection = [True] # missing True
-    leaves_max_depth_collection = [6] # was 3, changed for a new set
-    leaves_min_samples_split_collection = [6]
-    leaves_min_samples_leaf_collection = [4]
-    leaves_max_features_collection = ['sqrt'] # 'sqrt'
-    leaves_SS_N_reps_collection = [7]
-    leaves_SS_M_attributes_collection = [15] # it is lineal
-    distance_function_collection = ['gower']
-    leaves_RF_estimators_collection = [7]
-    output_tree_sets_collection = [False]
-    depth_limit_collection = [5]
-    bagging_collection = [1.00]
-    # parameters = {'trees_quantity':10,'alpha':10, 'beta':0.2, 'alpha_prime':0.5, 'gamma':10,'leaf_relative_instance_quantity':0.1 }
-    
     
 
     parameters = {
     'a_r':a,    
-    'trees_quantity':(int, 10,130), # 20- 130
+    'trees_quantity':(int, 10,20), # 20- 130
     "M_groups":(int,20,120), # 35 - 120 
-    "N_attr":(int, 2**5-1 , 2**16+1 ),
+    "N_attr":(int, 2**5-1 , 2**12+1 ),
     'leaf_relative_instance_quantity':(float,0.05,0.17), 
     'scaler': None,
     'do_ranking_split':True,
     'p':[
         (float, 0,1),
-        (float, 0,1),
-        (float, 0,1),
+        (float, 0,0), # do not accoun for semisupervised on this dataset
+        (float, 0,0), # do not accoun for semisupervised on this dataset
         (float, 0,1),
         (float, 0,1),
         (float, 0,1),
@@ -239,47 +180,13 @@ def train():
     "output_quality":False
     }
 
-    parameters = {
-    'a_r':a,    
-    'trees_quantity':20, # 20- 130
-    "M_groups":92, # 35 - 120 
-    "N_attr":63085,
-    'leaf_relative_instance_quantity':0.1360, 
-    'scaler': None,
-    'do_ranking_split':True,
-    'p':[
-        0.4891383414640993, 
-0.17753864202874392, 
-0.4674206149260396, 
-0.39452290856278793,
-0.6071346092346316, 
-0.03422383003573093, 
-0.10252125204930929
-    ],
-    'use_complex_model':True,
-    'leaves_max_depth': 9,
-    'leaves_min_samples_split':8,
-    'leaves_min_samples_leaf':7, 
-    'leaves_max_features':'sqrt',
-    'leaves_SS_N_reps':37,
-    'leaves_SS_M_attributes':4, # they cannot be too large. tried with 40. 
-    'distance_function':'gower',
-    'leaves_RF_estimators':12,
-    'output_tree_sets':False,
-    'm_iterations':123,
-    'bagging_pct':0.88,
-    'depth_limit': 5, # 4 and 20 originally, 0-16
-    "output_quality":False
-    }
-    
-    #param_grid = ParameterGrid(parameters)
 
     final_list = []
 
     i = 0
     test_size = .30
     k_fold = 10
-    unlabeled_ratio = .70
+    unlabeled_ratio = .00001
 
     train_set,test_set = multilabel_train_test_split(dataset, test_size=test_size, random_state=180, stratify=dataset[label_columns]) # .05 for the CLUS test as it was with train and test datasets
     train_set.reset_index(drop=True, inplace=True)
@@ -290,9 +197,6 @@ def train():
     #for parameters in list(param_grid): # it was 3 for original experiment.
     for i in range(1):
         params = calculate_parameters(parameters)
-        print("!!!!!!!!!!!!!! \n \n \n NOT USING PARAMETER COMBINATION  !!!!!!!!!!  \n\n\n\n\n !!!!!!!!!!!! \n ")
-        params = parameters
-
         print(params)
         auprc_curve = 0
         label_rank_average_precision = 0
@@ -307,7 +211,7 @@ def train():
         folds = multilabel_kfold_split(n_splits=k_fold, shuffle=True, random_state= 180)
         fold = -1
 
-        if(False): # go directly to final predictor
+        if(True): # do not go directly to final predictor
             for train_index, test_index in folds.split(train_set[instance_columns], train_set[label_columns] ):
                 fold += 1
                 print("On fold " , fold , "------>",len(train_index), "    " , len(train_set.index))
@@ -348,6 +252,7 @@ def train():
                 print("LR" , metrics["label_rank_average_precision"])
                 print("AUC" , metrics["auc_macro"]) 
 
+        exit()
         # one last time
         # we are not selecting the best one, yet. Just exploring the space with random. 
         labeled_instances, unlabeled_instances =  multilabel_train_test_split(train_set, test_size=unlabeled_ratio, random_state=141, stratify=train_set[label_columns]) # simulate unlabeled instances
@@ -372,7 +277,7 @@ def train():
 
         explain = ""
 
-        if( True):
+        if( False ): # change to explain
             explain = "explain"
             rules_list = []
             print("Getting tree structure")
